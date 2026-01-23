@@ -46,7 +46,6 @@ LoginAction has a property called `federated` which describes what the FedCM req
   "@type": "LoginAction",
   "federation": {
     "providers": [{
-      "@type": "FederatedLoginProvider",
       "configURL": "https://idp.example/config.json",
       "clientId": "1234",
       "nonce": "4567",
