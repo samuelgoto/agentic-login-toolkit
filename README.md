@@ -105,7 +105,8 @@ Problem:
 
 ### JSON-LD
 
-```javascript
+```html
+<script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "LoginAction",
@@ -119,6 +120,7 @@ Problem:
      }]
   },
 }
+</script>
 ```
 
 The result of the action gets returned as a DOM event:
