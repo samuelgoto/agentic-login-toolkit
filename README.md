@@ -121,6 +121,12 @@ Problem:
 }
 ```
 
+The result of the action gets returned as a DOM event:
+
+```javascript
+document.addEventListener("action", ({type, token}) => login(token));
+```
+
 ## Alternatives Considered
 
 ### Overload WWW-Authenticate
@@ -146,7 +152,7 @@ In this variation we’d use the <meta> tag disassociated with the element to be
   content="client_id=\"1234\", config_url=\"https://idp.example/fedcm.json\""
 >
 <script>
-document.addEventListener("federated-authentication", ({token}) => login(token));
+document.addEventListener("login", ({token}) => login(token));
 </script>
 ```
 
