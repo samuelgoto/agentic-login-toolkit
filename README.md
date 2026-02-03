@@ -2,19 +2,15 @@ Author: @samuelgoto
 Date: Jan 12, 2026
 Status: early draft
 
-# Declarative Semantic Login
+# The `<federation>` element
+
+TL;DR; This is a proposal to allows website authors to declare to agentic browsers (e.g. LLM-powered browser actuation) that a federated login option (e.g. social login) is available so that it can be used as a tool (rather than UI actuation). 
 
 ## Problem Statement
 
-In LLM-powered Agentic browsers, many user journeys involve logging in to websites.  As with most of the LLM-powered actuation, the LLM has a baseline understanding using statistical models that allows it to click on links and fill forms to assist the user through the process.
+In LLM-powered Agentic browsers, many user journeys involve logging in to websites.  As with most of the LLM-powered actuation, the LLM has a baseline understanding using statistical models that allows it to click on links and fill forms to assist the user through the process. As much as user agents are and should develop as many heuristics as possible to retrofit into the existing content on the Web, heuristics are, by design, unreliable and are expected to have lower precision and quality than structured content that is opted-into by website owners.
 
-However, as much as user agents are and should develop as many heuristics as possible to retrofit into the existing content on the Web, heuristics are, by design, unreliable and are expected to have lower precision and quality than structured content that is opted-into by website owners.
-
-Currently, login forms are marked up with a combination of low-level opaque primitives in browsers, which prevents browsers (specially agentic ones) to offer high-level / structured ways to log users in (e.g. an account chooser).
-
-For example, federated login is generally presented as a series of "Sign-in with IdP" buttons that are typically marked up as a `<a>`, a `<form>` or javascript, such as `window.open()` or a `window.location.href`.
-
-For example:
+Currently, login forms are marked up with a combination of low-level opaque primitives in browsers, which prevents browsers (specially agentic ones) to offer high-level / structured ways to log users in (e.g. an account chooser). Federated login, specifically, is generally presented as a series of "Sign-in with IdP" buttons that are typically marked up as a `<a>`, a `<form>` or javascript, such as `window.open()` or a `window.location.href`. For example:
 
 ```html
 <a href="https://idp.example/oauth?...">
@@ -22,76 +18,217 @@ For example:
 </a>
 ```
 
-The same goes for passkeys, which are usually also presented to the user as a "Sign-in with Passkey" button (or as a `mediation="conditional"` in autofill):
+The problem here is that, because this is just any other combination of low level HTML tags, the agentic browser can't infer federated login is offered as an option.
 
-For example:
+What’s the best way that website authors can annotate their page to make agentic browsersbetter aware of their federated login flows?
+
+## Goals
+
+There are many conflicting goals that we are navigating, but here are a few that we have found useful to constrain the solution space:
+
+- Must allow authors to provide federated login semantics to agentic browsers
+- Must degrade gracefully when browsers don’t support it
+- Must support wrapping existing deployed patterns of federated login on the Web
+- Must have a well defined accessibility contribution
+- Must work outside of agentic browsers (makes testing/developing/maintaining much easier)
+- Must allow authors to control the semantics in non-agentic browsers (allows authors to opt-out of deployment in non-agentic browser)
+
+## Proposal
+
+The proposal is to create an element that can wrap existing markup that allows the website author to declare what is the equivalent Federated Credential Management API request.
+
+The `<federation>` element’s semantics are that, when clicked, it executes a credential management API call to FedCM’s active mode. The element’s display (e.g. CSS) is controlled by its inner children.
+
+Before:
 
 ```html
-<span onclick="navigator.credentials.get({publicKey: ...})">
+Welcome to my website!
+
+<a href="https://idp1.example/oauth?">
+  Sign-in with IdP 1
+</a>
+
+<a href="https://idp2.example/oauth?">
+  Sign-in with IdP 2
+</a>
+```
+
+After:
+
+```html
+<federation onlogin="callback"
+  clientId="1234"
+  configURL="https://idp.example/config">
+  <a href="https://idp1.example/oauth?...">
+    Sign-in with IdP 1
+  </a>
+</federation>
+
+<federation onlogin="callback"
+  clientId="456"
+  configURL="https://idp.example/config">
+  <a href="https://idp2.example/oauth?...">
+    Sign-in with IdP 2
+  </a>
+</federation>
+```
+
+Having a `<federation>` element that has real semantics makes it much easier for developers to implement it, because they can test and prototype its usage locally in a traditional browser window (as opposed to ARIA and microdata, which requires testing with a screen reader and a search engine respectively).
+
+However, it should also be possible for the author to choose to only make the markup available for agentic browsers, so a parameter called `allow="agentic"` is introduced to allow-list only agentic use.
+
+`<federation>` has a `generic` ARIA role (similar to `<span>`’s contribution to ARIA) and relies on its inner children to set up the right ARIA roles.
+
+Here are the attributes of the <federation> element:
+
+- clientId
+- configURL
+- fields
+- params
+- loginhint
+- domainhint
+- onlogin (callback)
+- allow (deployment control)
+
+# Future Work and Forwards Compatibility
+
+We’d expect agentic login to incrementally need more and more declarative metadata about the authentication mechanisms that are available on the page.
+
+Specifically, we’d expect that new elements would be introduced to support passkeys, usernames/passwords, SMS and email OTPs and other emerging forms of digital identities, such as verified email addresses and government issued digital identities.
+
+There are some passkeys flows, specifically, that look like buttons, and could be easily translated to an equivalent <passkey> element:
+
+Before:
+
+```html
+<span onclick="navigator.credentials.get({
+  publicKey: ...})">
   Sign-in with Passkeys
 </span>
 ```
 
-Usernames and passwords are usually presented as a `<form>` element to users, with a lot more structure, combining the `<form>` elements and the `autocomplete` attribute.
+After:
 
 ```html
-<form action="...">
-  Username: <input type="text" autocomplete="username">
-  Password: <input type="password">
-  <input type="submit" value="login">
-</form>
-```
-
-Email and phone verification are also usually done with forms, with the handy `one-time-code` autocomplete:
-
-```html
-<form action="...">
-  Email OTP: <input type="text" autocomplete="one-time-code">
-  <input type="submit" value="login">
-</form>
-```
-
-These elements are usually used in combination, with most sites supporting a mix and match of these affordances (e.g. allowing the user to login with federation OR passwords OR passkeys, followed by email OR phone number verification).
-
-The problem here is that, because this is just any other combination of low level HTML tags, the (agentic or not) browser can't infer that a specific option (e.g. a federated login) can be offered to the user to login.
-
-Not every website developer will have the incentives (expertise or demand) to annotate their content to be accessed by assistive browsers, but for those that do, what’s the best way that they can annotate their page to make user agents (e.g. browsers and search engines) better aware of their login flows?
-
-## Proposal
-
-There are many serializations and ontologies under consideration (see below), but just to fix on something, let’s start with a proposal to introduce a `<login>` element comparable to [`<geolocation>`](https://github.com/WICG/PEPC/blob/main/geolocation_explainer.md), `<search>` and `<main>`.
-
-Like `<geolocation>` and unlike `<search>` and `<main>`, `<login>` is a declarative syntactic sugar over an JS imperative API, in this case the `navigator.credentials.get()` API. Unlike `<geolocation>` but like `<search>` and `<main>`, `<login>` renders the content from its inner children (rather than a browser provided content).
-
-```html
-<login type="federated">
-  <a href="https://idp.example/oauth?...">Sign-in with IdP</a>
-</login>
-```
-
-And a fully expanded form:
-
-```html
-<login type="federated" 
-  onselection="callback"
-  clientId="1234" 
-  configURL="https://idp.example/config.json">
-    <a href="https://idp.example/oauth?...">Sign-in with IdP</a>
-</login>
-```
-
-And here is what a webauthn element could look like:
-
-```html
-<login type="webauthn"
+<passkey
    onselection="callback"
    challenge="1234"
    rpId="example.com"
    userVerification="preferred"
    timeout="60000">
-  <span>Sign-in with a Passkey</span>
+  <span onclick="navigator.credentials.get({
+    publicKey: ...})">
+    Sign-in with Passkeys
+  </span>
+</passkey>
+```
+
+Once `<federation>` and `<passkey>` are introduced, we’d be able to introduce a `<login>` element that works like a `<select>` and `<option>` elements and displays an account chooser as an inline element.
+
+Something along the lines of:
+
+Before:
+
+```html
+Login to my website!
+
+<span onclick="navigator.credentials.get({
+  publicKey: ...})">
+  Sign-in with Passkeys
+</span>
+
+<a href="https://idp.example/oauth?">
+  Sign-in with IdP
+</a>
+
+<form>
+  Or enter your username/passwords:
+  <input autocomplete=”username”>
+  <input type=”password”>
+</form>
+```
+
+After:
+
+```html
+<login onselection=”callback”>
+
+  <passkey
+     challenge="1234"
+     rpId="example.com"
+     userVerification="preferred"
+     timeout="60000">
+    <span  onclick="
+       navigator.credentials.get({
+          publicKey: ...})">
+      Sign-in with Passkeys
+    </span>
+  </passkey>
+
+  <federation
+    clientId="1234"
+    configURL="https://idp.example/config">
+    <a href="https://idp.example/oauth?...">
+      Sign-in with IdP
+    </a>
+  </federation>
+
+  <form>
+    Or enter your username/passwords:
+    <input autocomplete=”username”>
+    <input type=”password”>
+  </form>
+
 </login>
 ```
+
+Conditional mediation requests for passkeys should also work, because there is sufficient annotation in the form elements in the form of an autocomplete=”webauthn” request.
+
+Before:
+
+```html
+Login to my website!
+
+<script type=”module”>
+const passkey = 
+  await navigator.credentials.get({
+    Mediation: “conditional”,
+    publicKey: ...
+  });
+</script>
+
+<form>
+  Or enter your username/passwords:
+  <input autocomplete=”username”>
+  <input type=”password” 
+    autocomplete=”webauthn”>
+</form>
+```
+
+After:
+
+```html
+<login onselection=”callback”>
+
+  <script type=”module”>
+  const passkey = 
+    await navigator.credentials.get({
+      Mediation: “conditional”,
+      publicKey: ...
+    });
+  </script>
+
+  <form>
+    Or enter your username/passwords:
+    <input autocomplete=”username”>
+    <input type=”password” 
+      autocomplete=”webauthn”>
+  </form>
+
+</login>
+```
+
+The introduction of a new `<login>` element that has UI semantics requires both `<federation>` and `<passkeys>` to be introduced, as well as developer activation, so it is not an immediate goal of this proposal, and is left as a future exercise that we have intentionally tried to design `<federation>` in a forwards compatible way.
 
 ## Alternatives Under Consideration
 
@@ -117,7 +254,6 @@ Here are a few ones that I’m aware of:
   - WebMCP: https://github.com/webmachinelearning/webmcp/issues/22
  
 Here are a few compelling variations that we are actively exploring:
-
 
 ### ARIA `role="login"`
 
@@ -206,7 +342,6 @@ document.addEventListener("login", ({token}) => login(token));
 </script>
 ```
 
-
 ## Alternatives Considered
 
 ### Overload WWW-Authenticate
@@ -222,56 +357,10 @@ Cons:
 - Requires RPs to redeploy their servers
 - WWW-Authenticate is blocking (and because of that, we think, poorly adopted)
 
-# Open Questions
-
-- Are there better ways to invoke the action other than events? Maybe `onaction` callbacks?
-- Should this support also Passwords/Passkeys too?
-
 ### Login page discovery
 
 When agents get to a website and want to login the user to it, they need to first find the login page in the first place. This often involves a series of heuristics and computer vision, but the developer can help the agent find it with the following convention:
 
 ```html
 <link rel="login" href="login.html">
-```
-
-(see alternatives considered for things like a .well-known file and other ways we can accomplish this)
-
-### Usernames/Passwords (or Passkeys)
-
-```html
-<form itemscope itemtype="https://schema.org/LoginAction">
-  <input type="email" autocomplete="username">
-  <input type="password" autocomplete="webauthn">
-  <button itemprop="target" type="submit">Login</button>
-</div>
-```
-
-### OTPs
-
-```html
-<form itemscope itemtype="https://schema.org/LoginAction">
-  <input itemprop="otp" autocomplete="one-time-code">
-  <button>Login</button>
-</div>
-```
-
-### Password Reset Forms
-
-```html
-<form itemscope itemtype="https://schema.org/ResetPasswordAction">
-  <input itemprop="username" type="email">
-  <button itemprop="target" type="submit">Reset password</button>
-</div>
-```
-
-### Extensibility
-
-```html
-<form itemscope itemtype="https://schema.org/Action">
-  <data itemprop="name" value="My custom form that does a bunch of stuff">
-  <data itemprop="description" 
-    value="This form creates an account for the user and sends them a gift from Macys">
-  <input itemprop="macys" name="macyscard">
-</form>
 ```
