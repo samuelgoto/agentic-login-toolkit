@@ -105,6 +105,17 @@ Here is the definition of the <federation> element:
 };
 ```
 
+FedCM IdPs can return multiple result types, one of which is a "token". When that's used, the RP gets an event that they can listen to:
+
+```html
+<federation clientId="1234" configURL="https://idp.example/config"
+  ontoken="({target: token}) => console.log(token)">
+  <a href="https://idp.example/oauth?...">
+    Sign-in with IdP
+  </a>
+</federation>
+```
+
 # Open Questions
 
 - Can/should developers be able to control whether the `<federation>` element is a "semantics only" element (such as `<search>`) so that it can be deployed exclusively in agentic browsers (but not affect regular users?)? If so, how?
