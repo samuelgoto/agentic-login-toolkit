@@ -283,14 +283,14 @@ Here are a few compelling variations that we are actively exploring:
 ### <script type="federation">
 
 ```html
-<script id="foo" type="federation">
+<script type="federation">
 {
   clientID: "1234",
   configURL: "https://idp.example",
 }
 </script>
 <script>
-document.getElementById("foo").addEventListener("login", () => ...)
+document.addEventListener("login", () => ...)
 </script>
 ```
 
@@ -351,10 +351,10 @@ For example:
   },
 }
 </script>
+<script>
+document.addEventListener("login", () => ...)
+</script>
 ```
-Open questions:
-
-- See open questions about ARIA above
 
 ### Mediation: `conditional`
 
