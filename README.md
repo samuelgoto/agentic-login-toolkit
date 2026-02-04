@@ -2,7 +2,7 @@ Author: @samuelgoto
 Date: Jan 12, 2026
 Status: early draft
 
-# The `<federation>` element
+# Declarative FedCM: The `<federation>` element
 
 TL;DR; This is a proposal to allows website authors to declare to agentic browsers (e.g. LLM-powered browser actuation) that a federated login option (e.g. social login) is available so that it can be used as a tool (rather than UI actuation). 
 
