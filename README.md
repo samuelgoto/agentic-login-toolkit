@@ -2,6 +2,8 @@ Author: @samuelgoto
 Date: Jan 12, 2026
 Status: early draft
 
+> With a massive amount of guidance from Philip Jägenstedt (on relationship to `<search>`, `<main>`, `ARIA` and `microdata`), Jeffrey Yasskin (on relationship to `<geolocation>` and `<permission>`, as well as `JSON-LD`)  Khushal Sagar Dominic Farolino (on relationship to `WebMCP`), Ryan Levering (on relationship to `schema.org`) and Christian Biesinger (on a variety of `HTML` design choices).
+
 # Declarative FedCM: The `<federation>` element
 
 TL;DR; This is a proposal to allows website authors to declare to agentic browsers (e.g. LLM-powered browser actuation) that a federated login option is available so that it can be used as a structured and deterministic high-level tool. 
