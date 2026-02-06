@@ -103,13 +103,13 @@ When clicked, a modal dialog is shown, with a browser mediated unified account c
 
 # Sequencing
 
-There is an overall belief that, while this seems a unified modal dialog for login seems like a plausible end state, it is likely that we can't quite reach it from where we are today in 2026: [`immediate mediation`](https://github.com/w3ctag/design-reviews/issues/1092) is still unresolved and the developer demand for a unified account chooser is still in its infancy.
+## Phase 1
 
-Agentic browsing, on the other hand, is testing the limits of the Web Platform and is currently strugging to log users into websites safely.
+While a unified modal dialog for login seems like a great end state, it doesn't quite seem like something that is quite within reach today: [`immediate mediation`](https://github.com/w3ctag/design-reviews/issues/1092) is still unresolved and the developer demand for a unified account chooser is still in its infancy.
 
-One way that occurred to us that we could bootstrap this process is to wrap the individual options in the NASCAR flag, rather than the NASCAR flag as a whole.
+One way that occurred to us that we could take a smaller and concrete step towards the right direction is to wrap the individual options in the NASCAR flag, rather than the top right corner login link.
 
-So, for example, as opposed to replacing the "login" top-right-corner links, we'd replace the individual passkeys buttons in the NASCAR flag:
+So, for example, as opposed to replacing the "login" top right corner links, we'd replace the individual passkeys buttons in the NASCAR flag:
 
 ```html
 <login onselect="login()">
@@ -135,7 +135,11 @@ And the following for social login buttons:
 </login>
 ```
 
-This would allow us to introduce `<login>` and `<federation>` for each of these individual mechanisms while working our way towards a unified UI for all of them, and ultimately replace the top-right-corner login links.
+This would allow us to introduce `<login>` for each of these individual mechanisms independently while working our way towards a unified UI for all of them, and ultimately replace the top-right-corner login links.
+
+## Phase 2
+
+Once we have each individual credential type working independently, it becomes a lot easier to unify them into a single UI. We'd expect that much of that work would result in the development of [`immediate mediation`](https://github.com/w3ctag/design-reviews/issues/1092) and would allow us to arrive at the desired end state.
 
 # Open Questions
 
