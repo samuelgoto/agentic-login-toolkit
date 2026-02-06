@@ -17,7 +17,7 @@ TL;DR; This is a proposal to allows website authors to use an inline `<login>` e
 </login>
 ```
 
-## Problem Statement
+# Problem Statement
 
 One of the most common patterns on the Web is to allow users to login to websites.
 
@@ -27,233 +27,74 @@ When users interact with the NASCAR flag, they have to guess what to use between
 
 Because the NASCAR flag is implemented in userland, it can't (by design) reconcile and unify across the various login methods, leading to confusion and friction at best and account duplication at worst.
 
-Fortunately, browsers have been able to mediate more and more of the login flows, with the advent of APIs such as [WebAuthn](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API) (a strong alternative to passwords), [WebOTP](https://developer.mozilla.org/en-US/docs/Web/API/WebOTP_API) (for verifying phone numbers), [FedCM](https://developer.mozilla.org/en-US/docs/Web/API/FedCM_API) (for federation) and more recently the [Digital Credentials](https://www.w3.org/TR/digital-credentials/) (for government-issued IDs) and [Email verification Protocol](https://github.com/WICG/email-verification-protocol) (for verifying email addresses), all exposed via the [Credential Management API](https://developer.mozilla.org/en-US/docs/Web/API/Credential_Management_API).
+Fortunately, browsers have been able to mediate more and more of the login flows, starting from some of the earliest attemps with [BasicAuth](https://en.wikipedia.org/wiki/Basic_access_authentication) but more recently with the advent of APIs such as [WebAuthn](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API) (a strong alternative to passwords), [WebOTP](https://developer.mozilla.org/en-US/docs/Web/API/WebOTP_API) (for verifying phone numbers), [FedCM](https://developer.mozilla.org/en-US/docs/Web/API/FedCM_API) (for federation), [Digital Credentials](https://www.w3.org/TR/digital-credentials/) (for government-issued IDs) and [Email verification Protocol](https://github.com/WICG/email-verification-protocol) (for verifying email addresses), all exposed via the [Credential Management API](https://developer.mozilla.org/en-US/docs/Web/API/Credential_Management_API).
 
-One concrete step browsers are taking to unify these flows is via [`immediate mediation`](https://github.com/w3ctag/design-reviews/issues/1092), which allows websites to get an account chooser that unifies across passwords/passkeys and social login.
+One recent step browsers are taking to unify these flows is via the [`immediate mediation`](https://github.com/w3ctag/design-reviews/issues/1092), which allows websites to get an account chooser that unifies across passwords/passkeys and social login.
 
 However, because `immediate mediation` is an imperative API call, the browser can't use it outside of its content area, for example in a common browser UI area (e.g. the URL bar) or in agentic flows (e.g. when an LLM is helping the user login).
 
-Would it be possible to create a declarative browser-mediated login flow?
+To further unify and reconcile across authentication mechanisms, would it be possible to create a declarative browser-mediated login flow that websites could use?
 
-## Goals
+# Goals
 
 There are many conflicting goals that we are navigating, but here are a few that we have found useful to constrain the solution space:
 
-- Must cover the most common login mechanisms, specifically passwords/passkeys and federation.
-- Must allow authors to provide login semantics to agentic browsers
+- Must cover the most common login mechanisms, specifically passwords/passkeys and federation
+- Must allow website authors to provide declarative login semantics to browsers (to allow use outside of the content area, e.g. the url bar or agentic browsing)
 - Must be able to be retrofited into existing websites (e.g. support feature detection)
 
-## Proposal
+# Proposal
 
-The proposal is to create an element that can wrap existing markup that allows the website author to declare what is the equivalent Federated Credential Management API request.
+The proposal is to introduce `<login>` element (along with a `<federation>` and `<passkey>` elements and more to follow) that can declaratively describe an imperative Credential Management API call.
 
-The `<federation>` element’s semantics are that, when clicked, it executes a credential management API call to FedCM’s `mode="active"`. 
+The `<login>` element's semantics are simliar to `<a>`: it is an inline element that renders its inner contents and performs an action `onclick`.
 
-The element’s display (e.g. CSS) is controlled by its inner children.
-
-Before:
+The intention is to replace the typical "login" links that show up on the top right corner of websites with the following:
 
 ```html
-<a href="https://idp.example/oauth?">
-  Sign-in with IdP
-</a>
+<login onselect="login()">
+  <passkey challenge="1234" rpId="example.com" userVerification="preferred" timeout="60000"></passkey>
+  <federation clientId="1234" configURL="https://idp1.example/config"></federation>
+  <federation clientId="5678" configURL="https://idp2.example/config"></federation>
+  login
+</login>
 ```
 
-After:
+When clicked, a modal dialog is shown, with a browser mediated unified account chooser that contains all of the options specified by the developer.
+
+# Sequencing
+
+There is an overall belief that, while this seems like a plausible end state, it is likely that we can't quite reach it from where we are: [`immediate mediation`](https://github.com/w3ctag/design-reviews/issues/1092) is still unresolved and the developer demand for a unified account chooser is still in its infancy.
+
+Agentic browsing, on the other hand, is testing the limits of the Web Platform and is currently strugging to log users into websites safely.
+
+One way that occurred to us that we could kick start this process is to wrap the individual options in the NASCAR flag, rather than the NASCAR flag as a whole.
+
+So, for example, for passkeys buttons:
 
 ```html
-<federation clientId="1234" configURL="https://idp.example/config">
-  <a href="https://idp.example/oauth?...">
-    Sign-in with IdP
-  </a>
-</federation>
+<login onselect="login()">
+  <passkey challenge="1234" rpId="example.com" userVerification="preferred" timeout="60000"></passkey>
+  <a onclick="navigator.credentials.get({publicKey: ...})">Sign-in with a Passkey</a>
+</login>
 ```
 
-Having a `<federation>` element that has real semantics makes it much easier for developers to implement it, because they can test and prototype its usage locally in a traditional browser window (as opposed to ARIA and microdata, which requires testing with a screen reader and a search engine respectively).
-
-`<federation>` has a `generic` ARIA role (similar to `<span>`’s contribution to ARIA) and relies on its inner children to set up the right ARIA roles.
-
-Here is the definition of the <federation> element:
-
-```typescript
-[
-    Exposed=Window,
-] interface HTMLFederationElement : HTMLElement {
-    // FedCM request parameters
-    [CEReactions, Reflect] attribute DOMString clientid;
-    [CEReactions, Reflect, URL] attribute USVString configurl;
-    [CEReactions, Reflect] attribute DOMString loginhint;
-    [CEReactions, Reflect] attribute DOMString domainhint;
-    [CEReactions, Reflect] attribute DOMString fields;
-    [CEReactions, Reflect] attribute DOMString params;
-    // Used when the IdP returns a token, rather than a redirect_to
-    attribute EventHandler ontoken;
-    readonly attribute DOMString token;
-};
-```
-
-FedCM IdPs can return multiple result types, one of which is a "token". When that's used, the RP gets an event that they can listen to:
+And the following for social login buttons:
 
 ```html
-<federation clientId="1234" configURL="https://idp.example/config"
-  ontoken="({target: token}) => console.log(token)">
-  <a href="https://idp.example/oauth?...">
-    Sign-in with IdP
-  </a>
-</federation>
+<login onselect="login()">
+  <federation clientId="1234" configURL="https://idp1.example/config"></federation>
+  <a onclick="navigator.credentials.get({identity: ...})">Sign-in with IdP</a>
+</login>
 ```
+
+This would allow us to introduce `<login>` and `<federation>` for each of these individual mechanisms while working towards a unified UI for all of them.
 
 # Open Questions
 
 - Can/should developers be able to control whether the `<federation>` element is a "semantics only" element (such as `<search>`) so that it can be deployed exclusively in agentic browsers (but not affect regular users?)? If so, how?
 
-# Future Work and Forwards Compatibility
-
-We’d expect agentic login to incrementally need more and more declarative metadata about the authentication mechanisms that are available on the page.
-
-Specifically, we’d expect that new elements would be introduced to support passkeys, usernames/passwords, SMS and email OTPs and other emerging forms of digital identities, such as verified email addresses and government issued digital identities.
-
-There are some passkeys flows, specifically, that look like buttons, and could be easily translated to an equivalent <passkey> element:
-
-Before:
-
-```html
-<span onclick="navigator.credentials.get({
-  publicKey: ...})">
-  Sign-in with Passkeys
-</span>
-```
-
-After:
-
-```html
-<passkey
-   onselection="callback"
-   challenge="1234"
-   rpId="example.com"
-   userVerification="preferred"
-   timeout="60000">
-  <span onclick="navigator.credentials.get({
-    publicKey: ...})">
-    Sign-in with Passkeys
-  </span>
-</passkey>
-```
-
-Once `<federation>` and `<passkey>` are introduced, we’d be able to introduce a `<login>` element that works like a `<select>` and `<option>` elements and displays an account chooser as an inline element.
-
-Something along the lines of:
-
-Before:
-
-```html
-Login to my website!
-
-<span onclick="navigator.credentials.get({
-  publicKey: ...})">
-  Sign-in with Passkeys
-</span>
-
-<a href="https://idp.example/oauth?">
-  Sign-in with IdP
-</a>
-
-<form>
-  Or enter your username/passwords:
-  <input autocomplete=”username”>
-  <input type=”password”>
-</form>
-```
-
-After:
-
-```html
-<login onselection=”callback”>
-
-  <passkey
-     challenge="1234"
-     rpId="example.com"
-     userVerification="preferred"
-     timeout="60000">
-    <span  onclick="
-       navigator.credentials.get({
-          publicKey: ...})">
-      Sign-in with Passkeys
-    </span>
-  </passkey>
-
-  <federation
-    clientId="1234"
-    configURL="https://idp.example/config">
-    <a href="https://idp.example/oauth?...">
-      Sign-in with IdP
-    </a>
-  </federation>
-
-  <form>
-    Or enter your username/passwords:
-    <input autocomplete=”username”>
-    <input type=”password”>
-  </form>
-
-</login>
-```
-
-Conditional mediation requests for passkeys should also work, because there is sufficient annotation in the form elements in the form of an autocomplete=”webauthn” request.
-
-Before:
-
-```html
-Login to my website!
-
-<script type=”module”>
-const passkey = 
-  await navigator.credentials.get({
-    Mediation: “conditional”,
-    publicKey: ...
-  });
-</script>
-
-<form>
-  Or enter your username/passwords:
-  <input autocomplete=”username”>
-  <input type=”password” 
-    autocomplete=”webauthn”>
-</form>
-```
-
-After:
-
-```html
-<login onselection=”callback”>
-
-  <script type=”module”>
-  const passkey = 
-    await navigator.credentials.get({
-      Mediation: “conditional”,
-      publicKey: ...
-    });
-  </script>
-
-  <form>
-    Or enter your username/passwords:
-    <input autocomplete=”username”>
-    <input type=”password” 
-      autocomplete=”webauthn”>
-  </form>
-
-</login>
-```
-
-The introduction of a new `<login>` element that has UI semantics requires both `<federation>` and `<passkeys>` to be introduced, as well as developer activation, so it is not an immediate goal of this proposal, and is left as a future exercise that we have intentionally tried to design `<federation>` in a forwards compatible way.
-
-On a related but orthogonal note, I think agents would probably also benefit from a declarative link to the "login" page. Unclear if that necessarily needs to be handled by `<login>` or a `rel="login"` `<link>` would do.
-
-```html
-<link rel="login" href="login.html">
-```
-
-## Alternatives Under Consideration
+# Alternatives Under Consideration
 
 There are two dimensions to be considered here with various options in each one: (a) how to encode semantics and (b) which ontology to use.
 
@@ -278,7 +119,7 @@ Here are a few ones that I’m aware of:
  
 Here are a few compelling variations that we are actively exploring:
 
-### <script type="federation">
+## <script type="federation">
 
 ```html
 <script type="federation">
@@ -292,7 +133,7 @@ document.addEventListener("login", () => ...)
 </script>
 ```
 
-### ARIA `role="login"`
+## ARIA `role="login"`
 
 This is a variation to augument `role` with an additional landmak, `login`, akin to [`search`](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/search_role):
 
@@ -310,7 +151,7 @@ Open questions:
 - What should be the ARIA role that the "login" role should have? Should it be a landmark?
 - How do we handle non-conforming screen readers? How do we make it backwards compatible to unchanged screen readers?
 
-### Microdata
+## Microdata
 
 This proposal is to introduce to LoginAction a property called `federation` which describes what the FedCM request would be.
 
@@ -328,7 +169,7 @@ Open Questions:
 
 - See open questions about ARIA above
 
-### JSON-LD
+## JSON-LD
 
 This proposal is to introduce to LoginAction a property called `federation` which describes what the FedCM request would be.
 
@@ -354,7 +195,7 @@ document.addEventListener("login", () => ...)
 </script>
 ```
 
-### Mediation: `conditional`
+## Mediation: `conditional`
 
 In this variation, we use the `mediation="conditional"` parameter to let the agent operate in the unresolved promise.
 
@@ -365,7 +206,7 @@ const {token} = await navigator.credentials.get({
 });
 ```
 
-### `<permission type="login">`
+## `<permission type="login">`
 
 We could extend the [PEPC element](https://github.com/WICG/PEPC/blob/main/explainer.md) to introduce a `type="login"` parameter.
 
@@ -375,7 +216,7 @@ We could extend the [PEPC element](https://github.com/WICG/PEPC/blob/main/explai
 </permission>
 ```
 
-### `meta` tags
+## `meta` tags
 
 In this variation we’d use the <meta> tag disassociated with the element to be clicked.
 
@@ -388,9 +229,9 @@ document.addEventListener("login", ({token}) => login(token));
 </script>
 ```
 
-## Alternatives Considered
+# Alternatives Considered
 
-### Overload WWW-Authenticate
+## Overload WWW-Authenticate
 
 In this variation we’d support a declarative request made via HTTP headers, like WWW-Authenticate or introduce a few one:
 
