@@ -4,57 +4,44 @@ Status: early draft
 
 > With a massive amount of guidance from Philip Jägenstedt (on relationship to `<search>`, `<main>`, `ARIA` and `microdata`), Jeffrey Yasskin (on relationship to `<geolocation>` and `<permission>`, as well as `JSON-LD`)  Khushal Sagar and Dominic Farolino (on relationship to `WebMCP`), Ryan Levering (on relationship to `schema.org`) and Christian Biesinger (on a variety of `HTML` design choices).
 
-# Declarative FedCM: The `<federation>` element
+# The `<login>` element
 
-TL;DR; This is a proposal to allows website authors to declaratively markup federated login options with a new element, `<federation>`, with a participating FedCM identity provider, as an alternative to the already existing imperative Javascript option. The `<federation>` element plays three roles: (a) it allows website authors to declaratively and ergonomically use federation, (b) it allows browsers to discover federated login option uniformally and finally (c) it serves as a necessary stepping stone towards a unified account chooser `<login>` element (see forwards compatibility section below).
+TL;DR; This is a proposal to allows website authors to use an inline `<login>` element to wrap their "login" links typically found on the top right corner. `<login>` renders like an `<a>` wrapping its inner content and opens a mediated **modal** dialog when clicked on with all login options available with a corresponding [Credential Management API](https://developer.mozilla.org/en-US/docs/Web/API/Credential_Management_API). The Credential Management call is constructed according to the options declared inline with the introduction of a declarative `<federation>` element, a `<passkey>` element and attributes to control passwords. The declarative `<login>` element allows browsers to pull login out of the content UI and into the common and interoperable browser UI assist users in ways that can't be done in userland (e.g. re-use preferences across sites, display in the URL bar and in agentic browser flows).
+
+```html
+<login onselect="login()">
+  <passkey challenge="1234" rpId="example.com" userVerification="preferred" timeout="60000"></passkey>
+  <federation clientId="1234" configURL="https://idp1.example/config"></federation>
+  <federation clientId="5678" configURL="https://idp2.example/config"></federation>
+  login
+</login>
+```
 
 ## Problem Statement
 
-Users of the web are increasingly using agentic browsers to complete their journeys. Many of these journeys involve logging in to websites with the user's passwords and federated accounts, the two most common login mechanisms on the web today.
+One of the most common patterns on the Web is to allow users to login to websites.
 
-To retrofit and log users in the existing content, agentic browsers have developed a statistical LLM model that gives them a broad (but non-deterministic) understanding of web pages and login forms, enough to allow them to click on links and fill forms to assist the user through the process. 
+Unfortunately, lacking browser support, login has been constructed entirely on top of the browser using low level primitives, such as `<form>` for passwords/passkeys and `<a>` for social login, the two most common authentication mechahnisms, in what's commonly called the "NASCAR flag" UI (called so because it looks like an area filled with commercial brands).
 
-Unfortunately, the same statistical design choice that brings the broad generalization and coverage also brings lower precision and recall compared to structured / deterministic APIs that are opted-into by website owners.
+When users interact with the NASCAR flag, they have to guess what to use between the various options: do I have a passkey? a password? or did I click in one of these social login options before?
 
-Currently, login forms are marked up with a combination of low-level opaque primitives in browsers. Federated login, specifically, is generally presented as a series of "Sign-in with IdP" buttons that are typically marked up as a `<a>`, a `<form>` or javascript, such as `window.open()` or a `window.location.href`. For example:
+Because the NASCAR flag is implemented in userland, it can't (by design) reconcile and unify across the various login methods, leading to confusion and friction at best and account duplication at worst.
 
-```html
-<a href="https://idp.example/oauth?...">
-  Sign-in with IdP
-</a>
-```
+Fortunately, browsers have been able to mediate more and more of the login flows, with the advent of APIs such as [WebAuthn](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API) (a strong alternative to passwords), [WebOTP](https://developer.mozilla.org/en-US/docs/Web/API/WebOTP_API) (for verifying phone numbers), [FedCM](https://developer.mozilla.org/en-US/docs/Web/API/FedCM_API) (for federation) and more recently the [Digital Credentials](https://www.w3.org/TR/digital-credentials/) (for government-issued IDs) and [Email verification Protocol](https://github.com/WICG/email-verification-protocol) (for verifying email addresses), all exposed via the [Credential Management API](https://developer.mozilla.org/en-US/docs/Web/API/Credential_Management_API).
 
-The problem here is that, because this is just any other combination of low level HTML tags, the agentic browser infers the options for federated login statistically rather than deterministically, in an otherwise well-defined standardized protocol (typically OIDC and SAML).
+One concrete step browsers are taking to unify these flows is via [`immediate mediation`](https://github.com/w3ctag/design-reviews/issues/1092), which allows websites to get an account chooser that unifies across passwords/passkeys and social login.
 
-Because of that, many user journeys that involve users logging in to websites with their federated accounts end up failing more often than not (in an unpredictable way).
+However, because `immediate mediation` is an imperative API call, the browser can't use it outside of its content area, for example in a common browser UI area (e.g. the URL bar) or in agentic flows (e.g. when an LLM is helping the user login).
 
-Fortunately, a meaningful percentage of the federated login traffic has already been migrated to FedCM, especially for consumers, and APIs such as [IdP-initiated Request](https://github.com/fedidcg/idp-initiated) can further cover the remaining of the deployment setups. 
-
-When the website uses FedCM to log users in via their federated accounts, the agentic browser is able to handle it as a structured tool, rather than as an unstructured statistical task.
-
-For example, because FedCM is mediated by the browser, the agentic browser can be sure that it is not accidentaly creating an account on the website (by comparing the list of [`approved_clients`](https://w3c-fedid.github.io/FedCM/#dom-identityprovideraccount-approved_clients)), substantially making this operatoin safer for users.
-
-```html
-<a href="https://idp.example/oauth?..." 
-  onclick="if (window.IdentityCredential) {navigator.credentials.get({identity: ...})} ">
-  Sign-in with IdP
-</a>
-```
-
-However, because FedCM has been deployed primarily as an imperative JS call (see snippet above), the browser isn't able to see it before the call is made.
-
-Is there anything that websites authors can do to make agentic browsers aware that a federated login option is available through a FedCM request?
+Would it be possible to create a declarative browser-mediated login flow?
 
 ## Goals
 
 There are many conflicting goals that we are navigating, but here are a few that we have found useful to constrain the solution space:
 
-- Must allow authors to provide federated login semantics to agentic browsers
-- Must degrade gracefully when browsers don’t support it
-- Must support wrapping existing deployed patterns of federated login on the Web
-- Must have a well defined accessibility contribution
-- Must work outside of agentic browsers (makes testing/developing/maintaining much easier)
-- Must allow authors to control the semantics in non-agentic browsers (allows authors to opt-out of deployment in non-agentic browser)
+- Must cover the most common login mechanisms, specifically passwords/passkeys and federation.
+- Must allow authors to provide login semantics to agentic browsers
+- Must be able to be retrofited into existing websites (e.g. support feature detection)
 
 ## Proposal
 
